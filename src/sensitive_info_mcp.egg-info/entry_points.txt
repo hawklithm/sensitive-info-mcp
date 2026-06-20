@@ -1,2 +1,0 @@
-[console_scripts]
-sensitive-info-mcp = sensitive_info_mcp.server:main

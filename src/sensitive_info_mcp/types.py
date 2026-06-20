@@ -24,7 +24,7 @@ class SensitiveType(str, Enum):
     URL_WITH_CRED = "url_with_cred"  # 含凭据的 URL
     SSN = "ssn"  # 社会保障号
     CUSTOM = "custom"  # 自定义规则匹配
-    AI_DETECTED = "ai_detected"  # AI 语义检测到的
+    LLM_DETECTED = "llm_detected"  # LLM 语义检测到的（由 Skill 二次筛选产生）
 
 
 class RiskLevel(str, Enum):
@@ -48,17 +48,22 @@ class MaskStrategy(str, Enum):
 
 
 class DetectionResult(BaseModel):
-    """单条检测结果"""
+    """单条检测结果
+
+    支持两种来源：rule（基础规则检测）与 llm（Skill 二次筛选产生）。
+    外部/LLM finding 可能没有精确位置，故 start/end/masked_value 均有默认值。
+    """
 
     type: SensitiveType
     value: str  # 原始值
-    masked_value: str  # 脱敏后的值
-    start: int  # 起始位置
-    end: int  # 结束位置
-    confidence: float = Field(ge=0.0, le=1.0, description="置信度 0-1")
-    source: str = "rule"  # "rule" | "ai"
+    masked_value: str = ""  # 脱敏后的值（由 Masker 填充）
+    start: int = 0  # 起始位置（外部 finding 可能为 0）
+    end: int = 0  # 结束位置
+    confidence: float = Field(0.7, ge=0.0, le=1.0, description="置信度 0-1")
+    source: str = "rule"  # "rule" | "llm"
     risk_level: RiskLevel = RiskLevel.MEDIUM
     suggestion: str = ""
+    location: str = ""  # 文件路径:行号 或片段 id（多文件报告溯源用）
 
 
 class MaskConfig(BaseModel):
@@ -80,10 +85,13 @@ class ScanReport(BaseModel):
     total_findings: int
     risk_level: RiskLevel
     findings: list[DetectionResult]
-    masked_text: str
-    original_length: int
-    masked_length: int
+    masked_text: str = ""
+    original_length: int = 0
+    masked_length: int = 0
     summary: dict[str, int] = Field(default_factory=dict, description="按类型统计")
+    source_summary: dict[str, int] = Field(
+        default_factory=dict, description="按来源 rule|llm 统计"
+    )
 
     def to_markdown(self) -> str:
         """生成 Markdown 报告"""
@@ -91,9 +99,15 @@ class ScanReport(BaseModel):
             "# 敏感信息扫描报告\n",
             f"- **发现总数**: {self.total_findings}",
             f"- **风险等级**: {self.risk_level.value}",
-            f"- **原始长度**: {self.original_length} 字符",
-            f"- **脱敏后长度**: {self.masked_length} 字符\n",
         ]
+        if self.original_length:
+            lines.append(f"- **原始长度**: {self.original_length} 字符")
+            lines.append(f"- **脱敏后长度**: {self.masked_length} 字符")
+        if self.source_summary:
+            parts = " | ".join(f"{k} {v} 处" for k, v in self.source_summary.items())
+            lines.append(f"- **来源统计**: {parts}")
+        lines.append("")
+
         if self.summary:
             lines.append("## 类型统计\n")
             lines.append("| 类型 | 数量 |")
@@ -102,14 +116,26 @@ class ScanReport(BaseModel):
                 lines.append(f"| {t} | {c} |")
             lines.append("")
 
+        if self.source_summary:
+            lines.append("## 来源统计\n")
+            lines.append("| 来源 | 数量 |")
+            lines.append("|------|------|")
+            for k, v in self.source_summary.items():
+                lines.append(f"| {k} | {v} |")
+            lines.append("")
+
         if self.findings:
             lines.append("## 详细发现\n")
-            lines.append("| # | 类型 | 原始值 | 脱敏值 | 置信度 | 来源 |")
-            lines.append("|---|------|--------|--------|--------|------|")
+            lines.append("| # | 类型 | 来源 | 位置 | 原始值 | 脱敏建议 | 风险 | 置信度 | 说明 |")
+            lines.append("|---|------|------|------|--------|----------|------|--------|------|")
             for i, f in enumerate(self.findings, 1):
+                val = f.value if len(f.value) <= 40 else f.value[:37] + "..."
+                mv = f.masked_value if len(f.masked_value) <= 30 else f.masked_value[:27] + "..."
+                loc = f.location or "-"
+                sug = f.suggestion if len(f.suggestion) <= 30 else f.suggestion[:27] + "..."
                 lines.append(
-                    f"| {i} | {f.type.value} | `{f.value}` | `{f.masked_value}` "
-                    f"| {f.confidence:.0%} | {f.source} |"
+                    f"| {i} | {f.type.value} | {f.source} | {loc} "
+                    f"| `{val}` | `{mv}` | {f.risk_level.value} | {f.confidence:.0%} | {sug} |"
                 )
         else:
             lines.append("## 未发现敏感信息 ✅")

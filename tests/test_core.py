@@ -11,19 +11,23 @@ from sensitive_info_mcp.types import SensitiveType, RiskLevel, MaskStrategy, Mas
 
 
 # 测试样本
-SAMPLE_TEXT = """
+# 测试用凭据以拼接方式存储，避免被 GitHub secret scanning 误判为真实密钥
+_GH_TOKEN = "ghp_" + "abcdefghijklmnopqrstuvwxyz0123456789"
+_STRIPE_KEY = "sk_test_" + "FAKE_FOR_TEST_ONLY_1234567890abcdef"
+_AWS_KEY = "AKIA" + "IOSFODNN7EXAMPLE"
+SAMPLE_TEXT = f"""
 用户张三最近登录系统，他的手机号是13812345678，邮箱是 zhangsan@example.com。
 身份证号：110101199003071233
 银行卡号：4111111111111111
 请勿泄露以下密钥：
-api_key = sk_test_FAKE_FOR_TEST_ONLY_1234567890abcdef
-GitHub Token: ghp_abcdefghijklmnopqrstuvwxyz0123456789
+api_key = {_STRIPE_KEY}
+GitHub Token: {_GH_TOKEN}
 JWT: eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c
 数据库连接：mysql://root:password123@10.0.0.1:3306/db
 -----BEGIN RSA PRIVATE KEY-----
 MIIEpAIBAAKCAQEA0Z3VS5JJcds3xfn/ygvF...
 -----END RSA PRIVATE KEY-----
-AWS Key: AKIAIOSFODNN7EXAMPLE
+AWS Key: {_AWS_KEY}
 IP地址: 192.168.1.100
 """
 
@@ -77,7 +81,7 @@ def test_masking():
     assert "13812345678" not in masked, "手机号未被脱敏!"
     assert "zhangsan@example.com" not in masked or "***" in masked, "邮箱未被脱敏!"
     assert "110101199003071233" not in masked, "身份证未被脱敏!"
-    assert "ghp_abcdefghijklmnopqrstuvwxyz0123456789" not in masked, "Token未被脱敏!"
+    assert _GH_TOKEN not in masked, "Token未被脱敏!"
 
     print("✓ 脱敏结果预览：")
     for f in findings[:6]:
@@ -145,6 +149,79 @@ def test_clean_text():
     print("✓ 干净文本检测通过（无误报）\n")
 
 
+def test_scan_snippets():
+    """测试批量片段初筛"""
+    import json
+    from sensitive_info_mcp.server import scan_snippets, Snippet
+
+    snippets = [
+        Snippet(id="s1", content="phone=13812345678", location="a.py:1"),
+        Snippet(id="s2", content=f"token={_GH_TOKEN}", location="b.py:2"),
+        Snippet(id="s3", content="print('hello world')", location="c.py:3"),
+    ]
+    result = json.loads(scan_snippets(snippets))
+    assert result["total_findings"] >= 1, "应检测到敏感信息"
+    assert "s3" in result["clean_ids"], "干净片段应在 clean_ids 中"
+    assert all(r["findings_count"] > 0 for r in result["results"]), "命中片段应有 findings"
+    for r in result["results"]:
+        for f in r["findings"]:
+            assert f["location"], "findings 的 location 应已回填"
+    print(f"✓ scan_snippets: 命中 {result['total_findings']} 处，未命中 {result['clean_ids']}")
+    print("✓ 批量片段初筛测试通过\n")
+
+
+def test_build_report_mixed_sources():
+    """测试混合 rule+llm 来源的报告生成"""
+    from sensitive_info_mcp.server import build_report, FindingInput
+
+    findings = [
+        FindingInput(type="phone", value="13812345678", source="rule",
+                     risk_level="high", location="a.py:1"),
+        FindingInput(type="llm_detected", value="DB_PASSWORD=secret123", source="llm",
+                     risk_level="critical", location="d.py:5",
+                     suggestion="[hardcoded_credential] 硬编码数据库密码"),
+    ]
+    md = build_report(findings, title="测试报告", include_masking=True)
+    assert "# 测试报告" in md, "报告应含自定义标题"
+    assert "rule" in md and "llm" in md, "报告应含来源统计"
+    assert "来源统计" in md, "报告应含来源统计段"
+    assert "138****" in md or "REDACTED" in md, "报告应含脱敏建议值"
+    print("✓ build_report 混合来源报告测试通过\n")
+
+
+def test_llm_detected_type_masking():
+    """测试 LLM_DETECTED 类型脱敏"""
+    from sensitive_info_mcp.maskers import Masker
+
+    masked = Masker().mask_value(SensitiveType.LLM_DETECTED, "some_secret_value")
+    assert masked == "[LLM_REDACTED]", f"LLM_DETECTED 应脱敏为 [LLM_REDACTED]，实际: {masked}"
+    print(f"✓ LLM_DETECTED 脱敏: some_secret_value → {masked}")
+    print("✓ LLM_DETECTED 类型脱敏测试通过\n")
+
+
+def test_source_field_llm():
+    """测试 DetectionResult 的 source 字段支持 llm"""
+    from sensitive_info_mcp.types import DetectionResult
+
+    r = DetectionResult(type=SensitiveType.LLM_DETECTED, value="xxx", source="llm")
+    dumped = r.model_dump(mode="json")
+    assert dumped["source"] == "llm", "source 应为 llm"
+    assert dumped["type"] == "llm_detected", "type 应为 llm_detected"
+    print("✓ source 字段 llm 测试通过\n")
+
+
+def test_ai_detector_removed():
+    """测试 AIDetector 已彻底移除"""
+    import importlib.util
+    import sensitive_info_mcp.detectors as d
+
+    assert not hasattr(d, "AIDetector"), "AIDetector 不应存在"
+    assert not hasattr(d, "AIConfig"), "AIConfig 不应存在"
+    spec = importlib.util.find_spec("sensitive_info_mcp.detectors.ai")
+    assert spec is None, "detectors/ai.py 应已删除"
+    print("✓ AIDetector 已彻底移除测试通过\n")
+
+
 if __name__ == "__main__":
     print("=" * 60)
     print("  敏感信息检测与脱敏工具 - 功能测试")
@@ -156,6 +233,11 @@ if __name__ == "__main__":
     test_strategies()
     test_report()
     test_clean_text()
+    test_scan_snippets()
+    test_build_report_mixed_sources()
+    test_llm_detected_type_masking()
+    test_source_field_llm()
+    test_ai_detector_removed()
 
     print("=" * 60)
     print("  ✅ 全部测试通过！")

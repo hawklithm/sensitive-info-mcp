@@ -1,60 +1,46 @@
-"""扫描器 - 整合规则检测、AI 检测和脱敏处理"""
+"""扫描器 - 整合规则检测与脱敏处理
+
+职责：仅基础检测（正则规则 + 校验算法）+ 脱敏。
+LLM 语义检测由外部 Skill 完成（见 skills/sensitive-info-scan）。
+"""
 from __future__ import annotations
 
 from typing import Optional
 
-from .detectors import AIDetector, AIConfig, RuleDetector
+from .detectors import RuleDetector
 from .maskers import Masker
 from .types import (
     DetectionResult,
     MaskConfig,
     RiskLevel,
     ScanReport,
-    SensitiveType,
 )
 
 
 class Scanner:
-    """敏感信息扫描器（整合规则 + AI + 脱敏）"""
+    """敏感信息扫描器（基础规则检测 + 脱敏）"""
 
     def __init__(
         self,
         mask_config: Optional[MaskConfig] = None,
-        ai_config: Optional[AIConfig] = None,
         extra_rules: Optional[list] = None,
-        enable_ai: bool = False,
     ) -> None:
         self.rule_detector = RuleDetector(extra_rules=extra_rules)
-        self.ai_detector = AIDetector(ai_config) if ai_config or enable_ai else AIDetector()
-        if enable_ai and ai_config:
-            ai_config.enabled = True
-            self.ai_detector.config = ai_config
         self.masker = Masker(mask_config or MaskConfig())
 
-    def detect(self, text: str, use_ai: bool = False) -> list[DetectionResult]:
-        """仅检测，不脱敏"""
-        findings = self.rule_detector.detect(text)
-        if use_ai and self.ai_detector.config.enabled:
-            # AI 补充检测：排除已被规则覆盖的区间
-            existing = {(f.start, f.end) for f in findings}
-            ai_findings = self.ai_detector.detect(text)
-            for f in ai_findings:
-                if not any(not (f.end <= s or f.start >= e) for s, e in existing):
-                    findings.append(f)
-            findings.sort(key=lambda r: r.start)
-        return findings
+    def detect(self, text: str) -> list[DetectionResult]:
+        """仅检测，不脱敏（基础规则检测）"""
+        return self.rule_detector.detect(text)
 
-    def mask(
-        self, text: str, use_ai: bool = False
-    ) -> tuple[str, list[DetectionResult]]:
+    def mask(self, text: str) -> tuple[str, list[DetectionResult]]:
         """检测并脱敏，返回 (脱敏后文本, 检测结果)"""
-        findings = self.detect(text, use_ai=use_ai)
+        findings = self.detect(text)
         masked_text, enriched = self.masker.apply(text, findings)
         return masked_text, enriched
 
-    def report(self, text: str, use_ai: bool = False) -> ScanReport:
+    def report(self, text: str) -> ScanReport:
         """生成完整扫描报告"""
-        findings = self.detect(text, use_ai=use_ai)
+        findings = self.detect(text)
         masked_text, enriched = self.masker.apply(text, findings)
 
         summary: dict[str, int] = {}
@@ -78,10 +64,11 @@ class Scanner:
             original_length=len(text),
             masked_length=len(masked_text),
             summary=summary,
+            source_summary={"rule": len(enriched)},
         )
 
 
-# 默认全局实例（规则检测，无 AI）
+# 默认全局实例（规则检测）
 _default_scanner: Optional[Scanner] = None
 
 

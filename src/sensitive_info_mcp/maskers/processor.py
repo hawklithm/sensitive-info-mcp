@@ -42,7 +42,7 @@ _TYPE_DEFAULTS: dict[SensitiveType, dict] = {
     SensitiveType.PASSWORD: {"strategy": MaskStrategy.REPLACE, "replacement": "[PASSWORD_REDACTED]"},
     SensitiveType.URL_WITH_CRED: {"strategy": MaskStrategy.REPLACE, "replacement": "[CREDENTIAL_REDACTED]"},
     SensitiveType.SSN: {"strategy": MaskStrategy.MASK, "keep_prefix": 0, "keep_suffix": 4},
-    SensitiveType.AI_DETECTED: {"strategy": MaskStrategy.REPLACE, "replacement": "[REDACTED]"},
+    SensitiveType.LLM_DETECTED: {"strategy": MaskStrategy.REPLACE, "replacement": "[LLM_REDACTED]"},
     SensitiveType.CUSTOM: {"strategy": MaskStrategy.MASK, "keep_prefix": 1, "keep_suffix": 1},
 }
 

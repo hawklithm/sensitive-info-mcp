@@ -1,17 +1,17 @@
 # 🔒 Sensitive Info MCP
 
-> AI 驱动的敏感信息检测与数据脱敏 MCP 工具
+> 规则驱动的敏感信息检测与数据脱敏 MCP 服务器 + LLM Skill 协同
 
-一个 Model Context Protocol (MCP) 服务器，用于检测和脱敏文本/文件中的敏感信息。支持 **14+ 类**敏感信息识别，结合**正则规则 + 校验算法 + AI 语义理解**三重检测，提供掩码、替换、哈希等多种脱敏策略。
+一个 Model Context Protocol (MCP) 服务器，用于检测和脱敏文本/文件/代码中的敏感信息。支持 **14+ 类**敏感信息识别，结合**正则规则 + 校验算法**做基础检测，并提供掩码、替换、哈希等多种脱敏策略。LLM 语义检测通过 **Skill** 编排 AI 助手完成（MCP 不内置 LLM 调用）。
 
 ## ✨ 特性
 
 - **全面检测**：手机号、身份证、银行卡、邮箱、API Key、JWT、私钥、AWS Key、GitHub Token 等 14+ 类
 - **智能校验**：身份证校验位算法、银行卡 Luhn 校验，降低误报
-- **AI 增强**：可选的 LLM 语义检测，识别变形/拆分的敏感信息和上下文隐私
+- **MCP/Skill 分工**：基础检测在 MCP（快、确定性），LLM 语义检测在 Skill（识别变形/拆分/上下文隐私），职责清晰
 - **灵活脱敏**：5 种策略（掩码/替换/哈希/保留格式/删除），支持按类型自定义
 - **中文友好**：所有正则使用 lookaround 断言，完美兼容中文环境
-- **多形态使用**：MCP Server（Claude/Cursor/CodeBuddy）、CLI 命令行、Python SDK
+- **多形态使用**：MCP Server（Claude/Cursor/CodeBuddy）、CLI 命令行、Python SDK、GitHub Action
 
 ## 📦 安装
 
@@ -35,9 +35,6 @@ sensitive-info-mcp "身份证：110101199003071233" --report
 
 # 扫描文件
 sensitive-info-mcp --file ./config.yaml --mask
-
-# 查看所有规则
-python -m sensitive_info_mcp.server --help
 ```
 
 ### 2. MCP Server（Claude Desktop / Cursor / CodeBuddy）
@@ -72,12 +69,14 @@ python -m sensitive_info_mcp.server --help
 
 | 工具 | 功能 |
 |------|------|
-| `scan_text` | 检测文本中的敏感信息 |
+| `scan_text` | 检测文本中的敏感信息（基础规则） |
 | `mask_text` | 检测并脱敏文本 |
-| `scan_report` | 生成 Markdown 扫描报告 |
+| `scan_report` | 生成单文本 Markdown 扫描报告 |
 | `scan_file` | 扫描文件 |
 | `mask_file` | 脱敏文件并保存 |
 | `list_rules` | 列出所有检测规则 |
+| `scan_snippets` | 批量对多个代码/配置片段做基础初筛（配合 Skill） |
+| `build_report` | 汇总 rule + llm 来源检测结果生成统一报告（配合 Skill） |
 
 ### 3. Python SDK
 
@@ -129,26 +128,48 @@ scanner = Scanner(mask_config=MaskConfig(
 ))
 ```
 
-### AI 检测（可选）
+## 🤝 结合 Skill 做 LLM 语义检测
 
-设置环境变量启用 AI 语义检测，可识别姓名、地址、变形信息等：
+本 MCP 仅做基础检测（正则 + 校验算法），不内置 LLM 调用。LLM 语义检测（识别变形/拆分敏感信息、非标准命名的硬编码凭据、内网信息、上下文隐私等）通过 **Skill** 编排 AI 助手完成 —— 因为 AI 助手本身就在执行 LLM，无需 MCP 再调外部 API。
+
+### 工作流
+
+```
+代码 / 配置片段
+     │
+     ├─ codegraph 取常量/变量定义 + Glob/Read 取配置文件
+     ▼
+┌───────────────────────┐
+│ MCP scan_snippets       │ ── rule 初筛 ──┐
+│ (正则 + 校验算法)       │                │
+└───────────────────────┘                │
+     │ 初筛未命中片段                      │
+     ▼                                    │
+┌───────────────────────┐                │
+│ AI 助手 LLM 二次筛选    │ ── llm findings│
+│ (Skill 识别规则)        │ ──────────────►│
+└───────────────────────┘                │
+     ▼                                    ▼
+┌───────────────────────┐
+│ MCP build_report        │ → 统一 Markdown 报告（区分 rule/llm 来源）
+└───────────────────────┘
+```
+
+### 安装 Skill
+
+将 `skills/sensitive-info-scan/SKILL.md` 复制到 CodeBuddy / Cursor 的 skills 目录：
 
 ```bash
-export OPENAI_API_KEY="sk-xxx"
-export OPENAI_BASE_URL="https://api.openai.com/v1"  # 可选，兼容第三方 API
-export SI_MCP_MODEL="gpt-4o-mini"                   # 可选
+# CodeBuddy
+mkdir -p ~/.codebuddy/skills/sensitive-info-scan
+cp skills/sensitive-info-scan/SKILL.md ~/.codebuddy/skills/sensitive-info-scan/SKILL.md
+
+# 或 Cursor / Claude Code 对应 skills 目录
 ```
 
-```python
-from sensitive_info_mcp.detectors import AIConfig
-from sensitive_info_mcp.scanner import Scanner
+重启会话后，对用户说"扫描代码中的敏感信息"，AI 助手会自动按 Skill 工作流执行：codegraph 取片段 → MCP 初筛 → LLM 二筛 → build_report 生成报告。
 
-scanner = Scanner(enable_ai=True, ai_config=AIConfig(
-    api_key="sk-xxx",
-    model="gpt-4o-mini",
-))
-findings = scanner.detect("我叫张三，住在北京海淀区xx路", use_ai=True)
-```
+> Skill 也可在无 codegraph 环境下工作（回退为 Grep 赋值行收集片段），详见 SKILL.md。
 
 ## 📋 支持的敏感信息类型
 
@@ -167,7 +188,7 @@ findings = scanner.detect("我叫张三，住在北京海淀区xx路", use_ai=Tr
 | URL 凭据 | `url_with_cred` | 高 | - |
 | IP 地址 | `ip_address` | 低 | - |
 | 社会保障号 | `ssn` | 高 | - |
-| AI 检测 | `ai_detected` | 中-高 | - |
+| LLM 检测 | `llm_detected` | 中-严重 | - (Skill 二次筛选产生) |
 
 ### 添加自定义规则
 
@@ -190,22 +211,25 @@ scanner = Scanner(extra_rules=[custom])
 ## 🏗️ 架构
 
 ```
-输入文本
+输入文本 / 文件 / 代码片段
    │
    ▼
-┌──────────────┐     ┌──────────────┐
-│  规则检测器   │     │  AI 检测器    │ (可选)
-│  正则 + 校验  │     │  LLM 语义理解 │
-└──────┬───────┘     └──────┬───────┘
-       │                     │
-       └─────────┬───────────┘
-                 ▼
-         ┌──────────────┐
-         │  脱敏处理器   │
-         │  掩码/替换/哈希│
-         └──────┬───────┘
-                ▼
-      脱敏文本 + 检测报告
+┌───────────────────┐
+│  规则检测器         │  正则 + 校验算法（身份证校验位 / 银行卡 Luhn）
+│  (RuleDetector)    │  → 14+ 类已知格式敏感信息
+└────────┬──────────┘
+         │
+         ▼
+┌───────────────────┐
+│  脱敏处理器         │  掩码 / 替换 / 哈希 / 保留格式 / 删除
+│  (Masker)          │
+└────────┬──────────┘
+         ▼
+   脱敏文本 + 检测报告
+
+┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄
+LLM 语义检测（在 Skill 层，不在 MCP 内）：
+  codegraph 取片段 → scan_snippets 初筛 → AI 助手 LLM 二筛 → build_report
 ```
 
 ## 📁 项目结构
@@ -213,15 +237,18 @@ scanner = Scanner(extra_rules=[custom])
 ```
 sensitive-info-mcp/
 ├── src/sensitive_info_mcp/
-│   ├── server.py          # MCP Server + CLI 入口
-│   ├── scanner.py         # 扫描器（整合检测+脱敏）
+│   ├── server.py          # MCP Server + CLI 入口（8 个工具）
+│   ├── scanner.py         # 扫描器（基础规则检测 + 脱敏）
 │   ├── types.py           # 类型定义
 │   ├── detectors/
 │   │   ├── base.py        # 检测器基类
-│   │   ├── rules.py       # 规则检测引擎
-│   │   └── ai.py          # AI 语义检测
+│   │   └── rules.py       # 规则检测引擎（14+ 类）
 │   └── maskers/
 │       └── processor.py   # 脱敏处理器
+├── skills/
+│   └── sensitive-info-scan/
+│       └── SKILL.md       # LLM 语义检测 Skill（codegraph + MCP + AI 助手协同）
+├── action.yml             # GitHub Action
 ├── examples/              # 使用示例
 ├── tests/                 # 测试用例
 └── pyproject.toml

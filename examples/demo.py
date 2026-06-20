@@ -62,9 +62,10 @@ def demo_report():
     print("示例 4：Markdown 扫描报告")
     print("=" * 50)
     scanner = Scanner()
-    text = """
+    _aws = "AKIA" + "IOSFODNN7EXAMPLE"
+    text = f"""
     系统配置泄露：
-    AWS_KEY = AKIAIOSFODNN7EXAMPLE
+    AWS_KEY = {_aws}
     DB_URL = mysql://root:secret123@10.0.0.1/db
     管理员手机：13812345678
     """
@@ -130,6 +131,48 @@ def demo_chinese_compatibility():
     print()
 
 
+def demo_scan_snippets_and_report():
+    """批量片段初筛 + 汇总报告（配合 Skill 工作流）"""
+    print("=" * 50)
+    print("示例 8：批量片段初筛 + 汇总报告")
+    print("=" * 50)
+    import json
+    from sensitive_info_mcp.server import scan_snippets, build_report, Snippet, FindingInput
+
+    # 模拟 codegraph / Glob 收集到的代码片段
+    # 测试用凭据以拼接方式存储，避免被 GitHub secret scanning 误判为真实密钥
+    _stripe = "sk_test_" + "4eC39HqLyjWDarjtT1zdp7dc"
+    _slack = "xoxb-" + "1234567890-abcdefghijklmnop"
+    snippets = [
+        Snippet(id="src/config.py:5", content=f'API_KEY = "{_stripe}"'),
+        Snippet(id="src/db.py:12", content='DB_PASSWORD = "my_secret_db_pass_123"'),
+        Snippet(id=".env:1", content=f"SLACK_TOKEN={_slack}"),
+        Snippet(id="src/utils.py:3", content="def helper(): return 'normal code'"),
+    ]
+    result = json.loads(scan_snippets(snippets))
+    print(f"  初筛命中 {result['total_findings']} 处，未命中片段: {result['clean_ids']}")
+
+    # 收集初筛命中的 rule findings
+    findings = []
+    for r in result["results"]:
+        for f in r["findings"]:
+            findings.append(FindingInput(**f))
+    # 模拟 LLM 二次筛选：对未命中片段中的硬编码密码做语义判断
+    findings.append(FindingInput(
+        type="llm_detected",
+        value="my_secret_db_pass_123",
+        source="llm",
+        risk_level="critical",
+        confidence=0.85,
+        location="src/db.py:12",
+        suggestion="[hardcoded_credential] 变量名 DB_PASSWORD 暗示敏感，硬编码明文密码",
+    ))
+
+    report = build_report(findings, title="代码敏感信息扫描报告", include_masking=True)
+    print(report)
+    print()
+
+
 if __name__ == "__main__":
     demo_basic_detection()
     demo_masking()
@@ -138,4 +181,5 @@ if __name__ == "__main__":
     demo_custom_rules()
     demo_clean_text()
     demo_chinese_compatibility()
+    demo_scan_snippets_and_report()
     print("✅ 所有示例运行完成！")

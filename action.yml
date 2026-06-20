@@ -1,5 +1,5 @@
 name: "Sensitive Info Scanner"
-description: "AI 驱动的敏感信息检测与数据脱敏 - 在 CI/CD 中自动扫描代码泄露的密钥、凭证、个人信息"
+description: "规则驱动的敏感信息检测与数据脱敏 - 在 CI/CD 中自动扫描代码泄露的密钥、凭证、个人信息"
 author: "Marcus"
 branding:
   icon: "shield"
@@ -22,14 +22,6 @@ inputs:
     description: "输出格式: text|json|markdown"
     required: false
     default: "markdown"
-  enable-ai:
-    description: "是否启用 AI 语义检测（需配置 OPENAI_API_KEY）"
-    required: false
-    default: "false"
-  openai-api-key:
-    description: "OpenAI API Key（启用 AI 时需要）"
-    required: false
-    default: ""
 
 outputs:
   findings-count:
@@ -54,8 +46,6 @@ runs:
     - name: Scan for sensitive information
       id: scan
       shell: bash
-      env:
-        OPENAI_API_KEY: ${{ inputs.openai-api-key }}
       run: |
         python -c "
         import os, sys, json, glob
@@ -63,12 +53,11 @@ runs:
         from sensitive_info_mcp.types import MaskStrategy
 
         strategy = os.environ.get('INPUT_MASK_STRATEGY', 'mask')
-        enable_ai = os.environ.get('INPUT_ENABLE_AI', 'false').lower() == 'true'
         scan_path = os.environ.get('INPUT_SCAN_PATH', '.')
         fail_on = os.environ.get('INPUT_FAIL_ON_RISK', 'high')
         fmt = os.environ.get('INPUT_OUTPUT_FORMAT', 'markdown')
 
-        scanner = Scanner(enable_ai=enable_ai)
+        scanner = Scanner()
 
         risk_order = {'low':0,'medium':1,'high':2,'critical':3,'none':-1}
         max_risk = -1
@@ -94,7 +83,7 @@ runs:
                     content = f.read()
             except OSError:
                 continue
-            findings = scanner.detect(content, use_ai=enable_ai)
+            findings = scanner.detect(content)
             if findings:
                 print(f'::warning file={fp}::{len(findings)} 处敏感信息')
                 for fnd in findings:
@@ -122,7 +111,6 @@ runs:
             sys.exit(1)
         " <<EOF
         INPUT_MASK_STRATEGY=${{ inputs.mask-strategy }}
-        INPUT_ENABLE_AI=${{ inputs.enable-ai }}
         INPUT_SCAN_PATH=${{ inputs.scan-path }}
         INPUT_FAIL_ON_RISK=${{ inputs.fail-on-risk }}
         INPUT_OUTPUT_FORMAT=${{ inputs.output-format }}
