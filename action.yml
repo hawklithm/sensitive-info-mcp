@@ -1,0 +1,129 @@
+name: "Sensitive Info Scanner"
+description: "AI 驱动的敏感信息检测与数据脱敏 - 在 CI/CD 中自动扫描代码泄露的密钥、凭证、个人信息"
+author: "Marcus"
+branding:
+  icon: "shield"
+  color: "red"
+
+inputs:
+  scan-path:
+    description: "扫描路径（文件或目录）"
+    required: false
+    default: "."
+  mask-strategy:
+    description: "脱敏策略: auto|mask|replace|hash|keep_format|redact"
+    required: false
+    default: "mask"
+  fail-on-risk:
+    description: "达到该风险等级时令工作流失败: low|medium|high|critical|none"
+    required: false
+    default: "high"
+  output-format:
+    description: "输出格式: text|json|markdown"
+    required: false
+    default: "markdown"
+  enable-ai:
+    description: "是否启用 AI 语义检测（需配置 OPENAI_API_KEY）"
+    required: false
+    default: "false"
+  openai-api-key:
+    description: "OpenAI API Key（启用 AI 时需要）"
+    required: false
+    default: ""
+
+outputs:
+  findings-count:
+    description: "检测到的敏感信息数量"
+    value: ${{ steps.scan.outputs.findings-count }}
+  risk-level:
+    description: "最高风险等级"
+    value: ${{ steps.scan.outputs.risk-level }}
+
+runs:
+  using: "composite"
+  steps:
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: "3.11"
+
+    - name: Install sensitive-info-mcp
+      shell: bash
+      run: pip install git+https://github.com/${{ github.repository }}.git
+
+    - name: Scan for sensitive information
+      id: scan
+      shell: bash
+      env:
+        OPENAI_API_KEY: ${{ inputs.openai-api-key }}
+      run: |
+        python -c "
+        import os, sys, json, glob
+        from sensitive_info_mcp.scanner import Scanner
+        from sensitive_info_mcp.types import MaskStrategy
+
+        strategy = os.environ.get('INPUT_MASK_STRATEGY', 'mask')
+        enable_ai = os.environ.get('INPUT_ENABLE_AI', 'false').lower() == 'true'
+        scan_path = os.environ.get('INPUT_SCAN_PATH', '.')
+        fail_on = os.environ.get('INPUT_FAIL_ON_RISK', 'high')
+        fmt = os.environ.get('INPUT_OUTPUT_FORMAT', 'markdown')
+
+        scanner = Scanner(enable_ai=enable_ai)
+
+        risk_order = {'low':0,'medium':1,'high':2,'critical':3,'none':-1}
+        max_risk = -1
+        total = 0
+        all_findings = []
+
+        targets = []
+        if os.path.isfile(scan_path):
+            targets = [scan_path]
+        else:
+            exts = ('.py','.js','.ts','.java','.go','.yaml','.yml','.json','.xml',
+                    '.env','.cfg','.conf','.ini','.txt','.md','.sql','.sh','.tf')
+            for root, _, files in os.walk(scan_path):
+                if '.git' in root or 'node_modules' in root:
+                    continue
+                for fn in files:
+                    if fn.endswith(exts):
+                        targets.append(os.path.join(root, fn))
+
+        for fp in targets:
+            try:
+                with open(fp, encoding='utf-8', errors='replace') as f:
+                    content = f.read()
+            except OSError:
+                continue
+            findings = scanner.detect(content, use_ai=enable_ai)
+            if findings:
+                print(f'::warning file={fp}::{len(findings)} 处敏感信息')
+                for fnd in findings:
+                    all_findings.append({'file':fp, **fnd.model_dump(mode='json')})
+                    if risk_order[fnd.risk_level.value] > max_risk:
+                        max_risk = risk_order[fnd.risk_level.value]
+                    total += 1
+
+        risk_name = ([k for k,v in risk_order.items() if v==max_risk] or ['none'])[0]
+        print(f'::set-output name=findings-count::{total}')
+        print(f'::set-output name=risk-level::{risk_name}')
+
+        if fmt == 'json':
+            print(json.dumps(all_findings, ensure_ascii=False, indent=2))
+        elif fmt == 'text':
+            for fnd in all_findings:
+                print(f\"{fnd['file']}: [{fnd['type']}] {fnd['value']}\")
+        else:
+            print(f'## 敏感信息扫描报告\n- 扫描文件: {len(targets)}\n- 发现: {total} 处\n- 风险等级: {risk_name}')
+            for fnd in all_findings:
+                print(f\"- {fnd['file']}: [{fnd['type']}] {fnd['value']}\")
+
+        if risk_order.get(fail_on, -1) >= 0 and max_risk >= risk_order[fail_on]:
+            print(f'::error::风险等级 {risk_name} 达到阈值 {fail_on}，扫描失败')
+            sys.exit(1)
+        " <<EOF
+        INPUT_MASK_STRATEGY=${{ inputs.mask-strategy }}
+        INPUT_ENABLE_AI=${{ inputs.enable-ai }}
+        INPUT_SCAN_PATH=${{ inputs.scan-path }}
+        INPUT_FAIL_ON_RISK=${{ inputs.fail-on-risk }}
+        INPUT_OUTPUT_FORMAT=${{ inputs.output-format }}
+        EOF
