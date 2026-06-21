@@ -92,7 +92,7 @@ class RuleDetector(BaseDetector):
             # AWS Access Key ID
             Rule(
                 type=SensitiveType.AWS_KEY,
-                pattern=re.compile(r"(?<![A-Za-z0-9])AKIA[0-9A-Z]{16}(?![A-Za-z0-9])"),
+                pattern=re.compile(r"(?:^|(?<![A-Za-z0-9]))AKIA[A-Za-z0-9]{16}(?![A-Za-z0-9])"),
                 risk_level=RiskLevel.CRITICAL,
                 confidence=0.98,
                 description="AWS Access Key ID",
@@ -100,7 +100,7 @@ class RuleDetector(BaseDetector):
             # 腾讯云 SecretId (AKID 前缀)
             Rule(
                 type=SensitiveType.API_KEY,
-                pattern=re.compile(r"(?<![A-Za-z0-9])AKID[A-Za-z0-9]{32,}(?![A-Za-z0-9])"),
+                pattern=re.compile(r"(?:^|(?<![A-Za-z0-9]))AKID[A-Za-z0-9]{32,}(?![A-Za-z0-9])"),
                 risk_level=RiskLevel.CRITICAL,
                 confidence=0.95,
                 description="腾讯云 SecretId",
@@ -109,7 +109,7 @@ class RuleDetector(BaseDetector):
             Rule(
                 type=SensitiveType.API_KEY,
                 pattern=re.compile(
-                    r"(?<![A-Za-z0-9_])secret_key\s*[:=]\s*['\"]?([A-Za-z0-9+/=]{32,})['\"]?",
+                    r"(?:^|(?<![A-Za-z0-9_]))secret_key\s*[:=]\s*['\"]?([A-Za-z0-9+/=]{32,})['\"]?",
                     re.IGNORECASE,
                 ),
                 risk_level=RiskLevel.CRITICAL,
@@ -120,7 +120,7 @@ class RuleDetector(BaseDetector):
             # 阿里云 AccessKeyId (LTAI 前缀)
             Rule(
                 type=SensitiveType.API_KEY,
-                pattern=re.compile(r"(?<![A-Za-z0-9])LTAI[A-Za-z0-9]{20,}(?![A-Za-z0-9])"),
+                pattern=re.compile(r"(?:^|(?<![A-Za-z0-9]))LTAI[A-Za-z0-9]{20,}(?![A-Za-z0-9])"),
                 risk_level=RiskLevel.CRITICAL,
                 confidence=0.98,
                 description="阿里云 AccessKeyId",
@@ -129,7 +129,7 @@ class RuleDetector(BaseDetector):
             Rule(
                 type=SensitiveType.API_KEY,
                 pattern=re.compile(
-                    r"(?<![A-Za-z0-9_])access_key_secret\s*[:=]\s*['\"]?([A-Za-z0-9+/]{30,})['\"]?",
+                    r"(?:^|(?<![A-Za-z0-9_]))access_key_secret\s*[:=]\s*['\"]?([A-Za-z0-9+/]{30,})['\"]?",
                     re.IGNORECASE,
                 ),
                 risk_level=RiskLevel.CRITICAL,
@@ -140,7 +140,7 @@ class RuleDetector(BaseDetector):
             # 华为云 AK (Access Key ID)
             Rule(
                 type=SensitiveType.API_KEY,
-                pattern=re.compile(r"(?<![A-Za-z0-9])AK[A-Za-z0-9]{20,}(?![A-Za-z0-9])"),
+                pattern=re.compile(r"(?:^|(?<![A-Za-z0-9]))AK[A-Za-z0-9]{20,}(?![A-Za-z0-9])"),
                 risk_level=RiskLevel.CRITICAL,
                 confidence=0.95,
                 description="华为云 Access Key ID",
@@ -149,7 +149,7 @@ class RuleDetector(BaseDetector):
             Rule(
                 type=SensitiveType.API_KEY,
                 pattern=re.compile(
-                    r"(?<![A-Za-z0-9_])secret_key\s*[:=]\s*['\"]?([A-Za-z0-9+/]{32,})['\"]?",
+                    r"(?:^|(?<![A-Za-z0-9_]))secret_key\s*[:=]\s*['\"]?([A-Za-z0-9+/]{32,})['\"]?",
                     re.IGNORECASE,
                 ),
                 risk_level=RiskLevel.CRITICAL,
@@ -160,7 +160,7 @@ class RuleDetector(BaseDetector):
             # 火山引擎/火山方舟 AccessKeyId (AKLT 前缀)
             Rule(
                 type=SensitiveType.API_KEY,
-                pattern=re.compile(r"(?<![A-Za-z0-9])AKLT[A-Za-z0-9]{20,}(?![A-Za-z0-9])"),
+                pattern=re.compile(r"(?:^|(?<![A-Za-z0-9]))AKLT[A-Za-z0-9]{20,}(?![A-Za-z0-9])"),
                 risk_level=RiskLevel.CRITICAL,
                 confidence=0.95,
                 description="火山引擎 AccessKeyId",
@@ -168,7 +168,7 @@ class RuleDetector(BaseDetector):
             # Anthropic Claude API Key (sk-ant- 前缀)
             Rule(
                 type=SensitiveType.API_KEY,
-                pattern=re.compile(r"(?<![A-Za-z0-9])sk-ant-[A-Za-z0-9_-]{40,}(?![A-Za-z0-9])"),
+                pattern=re.compile(r"(?:^|(?<![A-Za-z0-9]))sk-ant-[A-Za-z0-9_-]{32,}(?![A-Za-z0-9])"),
                 risk_level=RiskLevel.CRITICAL,
                 confidence=0.98,
                 description="Anthropic Claude API Key",
@@ -176,7 +176,7 @@ class RuleDetector(BaseDetector):
             # OpenRouter API Key (sk-or- 前缀)
             Rule(
                 type=SensitiveType.API_KEY,
-                pattern=re.compile(r"(?<![A-Za-z0-9])sk-or-[A-Za-z0-9_-]{40,}(?![A-Za-z0-9])"),
+                pattern=re.compile(r"(?:^|(?<![A-Za-z0-9]))sk-or-[A-Za-z0-9_-]{32,}(?![A-Za-z0-9])"),
                 risk_level=RiskLevel.CRITICAL,
                 confidence=0.98,
                 description="OpenRouter API Key",
@@ -184,7 +184,7 @@ class RuleDetector(BaseDetector):
             # Cohere API Key (ek_ 前缀)
             Rule(
                 type=SensitiveType.API_KEY,
-                pattern=re.compile(r"(?<![A-Za-z0-9])ek_[A-Za-z0-9]{40,}(?![A-Za-z0-9])"),
+                pattern=re.compile(r"(?:^|(?<![A-Za-z0-9]))ek_[A-Za-z0-9]{32,}(?![A-Za-z0-9])"),
                 risk_level=RiskLevel.CRITICAL,
                 confidence=0.95,
                 description="Cohere API Key",
@@ -192,16 +192,23 @@ class RuleDetector(BaseDetector):
             # Groq API Key (gsk_ 前缀)
             Rule(
                 type=SensitiveType.API_KEY,
-                pattern=re.compile(r"(?<![A-Za-z0-9])gsk_[A-Za-z0-9]{40,}(?![A-Za-z0-9])"),
+                pattern=re.compile(r"(?:^|(?<![A-Za-z0-9]))gsk_[A-Za-z0-9]{32,}(?![A-Za-z0-9])"),
                 risk_level=RiskLevel.CRITICAL,
                 confidence=0.95,
                 description="Groq API Key",
             ),
-            # OpenAI API Key (sk- 前缀，已有通用规则覆盖，此处增强置信度)
+            # DeepSeek API Key (sk- 前缀，与 OpenAI 格式相同)
+            Rule(
+                type=SensitiveType.API_KEY,
+                pattern=re.compile(r"(?:^|(?<![A-Za-z0-9]))sk-[A-Za-z0-9_-]{32,}(?![A-Za-z0-9])"),
+                risk_level=RiskLevel.CRITICAL,
+                confidence=0.98,
+                description="DeepSeek API Key",
+            ),
             # GitHub Token (ghp_/gho_/ghu_/ghs_/ghr_)
             Rule(
                 type=SensitiveType.GITHUB_TOKEN,
-                pattern=re.compile(r"(?<![A-Za-z0-9])gh[posur]_[A-Za-z0-9]{36,255}(?![A-Za-z0-9])"),
+                pattern=re.compile(r"(?:^|(?<![A-Za-z0-9]))gh[po][su r]_[A-Za-z0-9]{36,255}(?![A-Za-z0-9])"),
                 risk_level=RiskLevel.CRITICAL,
                 confidence=0.98,
                 description="GitHub Personal Access Token",
@@ -210,7 +217,7 @@ class RuleDetector(BaseDetector):
             Rule(
                 type=SensitiveType.JWT,
                 pattern=re.compile(
-                    r"(?<![A-Za-z0-9_-])eyJ[A-Za-z0-9_-]+\.eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+(?![A-Za-z0-9_-])"
+                    r"(?:^|(?<![A-Za-z0-9_-]))eyJ[A-Za-z0-9_-]+\.eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+(?![A-Za-z0-9_-])"
                 ),
                 risk_level=RiskLevel.CRITICAL,
                 confidence=0.95,
@@ -220,8 +227,8 @@ class RuleDetector(BaseDetector):
             Rule(
                 type=SensitiveType.API_KEY,
                 pattern=re.compile(
-                    r"(?<![A-Za-z0-9_])(?:api[_-]?key|secret|token|access[_-]?key)\s*[:=]\s*"
-                    r"['\"]?([A-Za-z0-9_/+=\-]{32,})['\"]?",
+                    r"(?:^|(?<![A-Za-z0-9_]))(?:api[-_]?key|secret|token|access[-_]?key)\s*[:=]\s*"
+                    r"['\"]?([A-Za-z0-9_/+=-]{32,})['\"]?",
                     re.IGNORECASE,
                 ),
                 risk_level=RiskLevel.HIGH,
@@ -232,7 +239,7 @@ class RuleDetector(BaseDetector):
             # Google API Key
             Rule(
                 type=SensitiveType.API_KEY,
-                pattern=re.compile(r"(?<![A-Za-z0-9])AIza[0-9A-Za-z_\-]{35}(?![A-Za-z0-9])"),
+                pattern=re.compile(r"(?:^|(?<![A-Za-z0-9]))AIza[A-Za-z0-9A-Za-z_ -]{35}(?![A-Za-z0-9])"),
                 risk_level=RiskLevel.HIGH,
                 confidence=0.9,
                 description="Google API Key",
@@ -240,7 +247,7 @@ class RuleDetector(BaseDetector):
             # Slack Token
             Rule(
                 type=SensitiveType.API_KEY,
-                pattern=re.compile(r"(?<![A-Za-z0-9])xox[baprs]-[A-Za-z0-9-]{10,}(?![A-Za-z0-9])"),
+                pattern=re.compile(r"(?:^|(?<![A-Za-z0-9]))xox[baprs]-[A-Za-z0-9-]{10,}(?![A-Za-z0-9])"),
                 risk_level=RiskLevel.HIGH,
                 confidence=0.9,
                 description="Slack Token",
@@ -249,7 +256,7 @@ class RuleDetector(BaseDetector):
             Rule(
                 type=SensitiveType.URL_WITH_CRED,
                 pattern=re.compile(
-                    r"(?<![A-Za-z0-9])[a-zA-Z][a-zA-Z0-9+.-]*://[^/\s:@]+:([^/\s:@]+)@",
+                    r"(?:^|(?<![A-Za-z0-9]))[a-zA-Z][a-zA-Z0-9+.-]*://[^/\s:@]+:([^/\s:@]+)@",
                 ),
                 risk_level=RiskLevel.HIGH,
                 confidence=0.85,
@@ -260,7 +267,7 @@ class RuleDetector(BaseDetector):
             Rule(
                 type=SensitiveType.PASSWORD,
                 pattern=re.compile(
-                    r"(?<![A-Za-z0-9_])(?:password|passwd|pwd)\s*[:=]\s*['\"]?(\S+?)['\"]?(?:\s|$)",
+                    r"(?:^|(?<![A-Za-z0-9_]))(?:password|passwd|pwd)\s*[:=]\s*['\"]?(\S+?)['\"]?(?:\s|$)",
                     re.IGNORECASE,
                 ),
                 risk_level=RiskLevel.HIGH,
@@ -305,7 +312,7 @@ class RuleDetector(BaseDetector):
             Rule(
                 type=SensitiveType.EMAIL,
                 pattern=re.compile(
-                    r"(?<![A-Za-z0-9._%+-])[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}(?![A-Za-z0-9._%+-])"
+                    r"(?:^|(?<![A-Za-z0-9._%+-]))[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}(?![A-Za-z0-9._%+-])"
                 ),
                 risk_level=RiskLevel.MEDIUM,
                 confidence=0.95,
@@ -315,7 +322,7 @@ class RuleDetector(BaseDetector):
             Rule(
                 type=SensitiveType.IP_ADDRESS,
                 pattern=re.compile(
-                    r"(?<!\d)(?:(?:25[0-5]|2[0-4]\d|1?\d?\d)\.){3}(?:25[0-5]|2[0-4]\d|1?\d?\d)(?!\d)"
+                    r"(?:^|(?<!\d))(?:(?:25[0-5]|2[0-4]\d|1?\d?\d)\.){3}(?:25[0-5]|2[0-4]\d|1?\d?\d)(?!\d)"
                 ),
                 risk_level=RiskLevel.LOW,
                 confidence=0.8,
