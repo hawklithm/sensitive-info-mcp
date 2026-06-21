@@ -97,6 +97,107 @@ class RuleDetector(BaseDetector):
                 confidence=0.98,
                 description="AWS Access Key ID",
             ),
+            # 腾讯云 SecretId (AKID 前缀)
+            Rule(
+                type=SensitiveType.API_KEY,
+                pattern=re.compile(r"(?<![A-Za-z0-9])AKID[A-Za-z0-9]{32,}(?![A-Za-z0-9])"),
+                risk_level=RiskLevel.CRITICAL,
+                confidence=0.95,
+                description="腾讯云 SecretId",
+            ),
+            # 腾讯云 SecretKey (赋值格式)
+            Rule(
+                type=SensitiveType.API_KEY,
+                pattern=re.compile(
+                    r"(?<![A-Za-z0-9_])secret_key\s*[:=]\s*['\"]?([A-Za-z0-9+/=]{32,})['\"]?",
+                    re.IGNORECASE,
+                ),
+                risk_level=RiskLevel.CRITICAL,
+                confidence=0.9,
+                extract_group=1,
+                description="腾讯云 SecretKey",
+            ),
+            # 阿里云 AccessKeyId (LTAI 前缀)
+            Rule(
+                type=SensitiveType.API_KEY,
+                pattern=re.compile(r"(?<![A-Za-z0-9])LTAI[A-Za-z0-9]{20,}(?![A-Za-z0-9])"),
+                risk_level=RiskLevel.CRITICAL,
+                confidence=0.98,
+                description="阿里云 AccessKeyId",
+            ),
+            # 阿里云 AccessKeySecret (赋值格式)
+            Rule(
+                type=SensitiveType.API_KEY,
+                pattern=re.compile(
+                    r"(?<![A-Za-z0-9_])access_key_secret\s*[:=]\s*['\"]?([A-Za-z0-9+/]{30,})['\"]?",
+                    re.IGNORECASE,
+                ),
+                risk_level=RiskLevel.CRITICAL,
+                confidence=0.9,
+                extract_group=1,
+                description="阿里云 AccessKeySecret",
+            ),
+            # 华为云 AK (Access Key ID)
+            Rule(
+                type=SensitiveType.API_KEY,
+                pattern=re.compile(r"(?<![A-Za-z0-9])AK[A-Za-z0-9]{20,}(?![A-Za-z0-9])"),
+                risk_level=RiskLevel.CRITICAL,
+                confidence=0.95,
+                description="华为云 Access Key ID",
+            ),
+            # 华为云 SK (Secret Key 赋值格式)
+            Rule(
+                type=SensitiveType.API_KEY,
+                pattern=re.compile(
+                    r"(?<![A-Za-z0-9_])secret_key\s*[:=]\s*['\"]?([A-Za-z0-9+/]{32,})['\"]?",
+                    re.IGNORECASE,
+                ),
+                risk_level=RiskLevel.CRITICAL,
+                confidence=0.9,
+                extract_group=1,
+                description="华为云 Secret Key",
+            ),
+            # 火山引擎/火山方舟 AccessKeyId (AKLT 前缀)
+            Rule(
+                type=SensitiveType.API_KEY,
+                pattern=re.compile(r"(?<![A-Za-z0-9])AKLT[A-Za-z0-9]{20,}(?![A-Za-z0-9])"),
+                risk_level=RiskLevel.CRITICAL,
+                confidence=0.95,
+                description="火山引擎 AccessKeyId",
+            ),
+            # Anthropic Claude API Key (sk-ant- 前缀)
+            Rule(
+                type=SensitiveType.API_KEY,
+                pattern=re.compile(r"(?<![A-Za-z0-9])sk-ant-[A-Za-z0-9_-]{40,}(?![A-Za-z0-9])"),
+                risk_level=RiskLevel.CRITICAL,
+                confidence=0.98,
+                description="Anthropic Claude API Key",
+            ),
+            # OpenRouter API Key (sk-or- 前缀)
+            Rule(
+                type=SensitiveType.API_KEY,
+                pattern=re.compile(r"(?<![A-Za-z0-9])sk-or-[A-Za-z0-9_-]{40,}(?![A-Za-z0-9])"),
+                risk_level=RiskLevel.CRITICAL,
+                confidence=0.98,
+                description="OpenRouter API Key",
+            ),
+            # Cohere API Key (ek_ 前缀)
+            Rule(
+                type=SensitiveType.API_KEY,
+                pattern=re.compile(r"(?<![A-Za-z0-9])ek_[A-Za-z0-9]{40,}(?![A-Za-z0-9])"),
+                risk_level=RiskLevel.CRITICAL,
+                confidence=0.95,
+                description="Cohere API Key",
+            ),
+            # Groq API Key (gsk_ 前缀)
+            Rule(
+                type=SensitiveType.API_KEY,
+                pattern=re.compile(r"(?<![A-Za-z0-9])gsk_[A-Za-z0-9]{40,}(?![A-Za-z0-9])"),
+                risk_level=RiskLevel.CRITICAL,
+                confidence=0.95,
+                description="Groq API Key",
+            ),
+            # OpenAI API Key (sk- 前缀，已有通用规则覆盖，此处增强置信度)
             # GitHub Token (ghp_/gho_/ghu_/ghs_/ghr_)
             Rule(
                 type=SensitiveType.GITHUB_TOKEN,
